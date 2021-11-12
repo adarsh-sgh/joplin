@@ -96,6 +96,13 @@ export const onSavePasswordClick = (mk: MasterKeyEntity, passwords: Record<strin
 	} else {
 		Setting.setObjectValue('encryption.passwordCache', mk.id, password);
 	}
+
+	// When setting a master key password, if the master password is not set, we
+	// assume that this password is the master password. If it turns out it's
+	// not, it's always possible to change it in the UI.
+	if (password && !Setting.value('encryption.masterPassword')) {
+		Setting.setValue('encryption.masterPassword', password);
+	}
 };
 
 export const onMasterPasswordSave = (masterPasswordInput: string) => {
@@ -141,6 +148,11 @@ export const useInputPasswords = (propsPasswords: Record<string, string>) => {
 
 export const usePasswordChecker = (masterKeys: MasterKeyEntity[], activeMasterKeyId: string, masterPassword: string, passwords: Record<string, string>) => {
 	const [passwordChecks, setPasswordChecks] = useState<PasswordChecks>({});
+
+	// "masterPasswordKeys" are the master key that can be decrypted with the
+	// master password. It should be all of them normally, but in previous
+	// versions it was possible to have different passwords for different keys,
+	// so we need this for backward compatibility.
 	const [masterPasswordKeys, setMasterPasswordKeys] = useState<PasswordChecks>({});
 	const [masterPasswordStatus, setMasterPasswordStatus] = useState<MasterPasswordStatus>(MasterPasswordStatus.Unknown);
 
@@ -167,7 +179,6 @@ export const usePasswordChecker = (masterKeys: MasterKeyEntity[], activeMasterKe
 
 		setMasterPasswordKeys(masterPasswordKeys => {
 			if (JSON.stringify(newMasterPasswordKeys) === JSON.stringify(masterPasswordKeys)) return masterPasswordKeys;
-			console.info('====', JSON.stringify(newMasterPasswordKeys), JSON.stringify(masterPasswordKeys));
 			return newMasterPasswordKeys;
 		});
 
@@ -177,14 +188,29 @@ export const usePasswordChecker = (masterKeys: MasterKeyEntity[], activeMasterKe
 	return { passwordChecks, masterPasswordKeys, masterPasswordStatus };
 };
 
-export const upgradeMasterKey = async (masterKey: MasterKeyEntity, passwordChecks: PasswordChecks, passwords: Record<string, string>): Promise<string> => {
-	const passwordCheck = passwordChecks[masterKey.id];
-	if (!passwordCheck) {
+export const useNeedMasterPassword = (passwordChecks: PasswordChecks, masterKeys: MasterKeyEntity[]) => {
+	for (const [mkId, valid] of Object.entries(passwordChecks)) {
+		const mk = masterKeys.find(mk => mk.id === mkId);
+		if (!mk) continue;
+		if (!masterKeyEnabled(mk)) continue;
+		if (!valid) return true;
+	}
+	return false;
+};
+
+export const determineKeyPassword = (masterKeyId: string, masterPasswordKeys: PasswordChecks, masterPassword: string, passwords: Record<string, string>): string => {
+	if (masterPasswordKeys[masterKeyId]) return masterPassword;
+	return passwords[masterKeyId];
+};
+
+export const upgradeMasterKey = async (masterKey: MasterKeyEntity, password: string): Promise<string> => {
+	if (!password) {
 		return _('Please enter your password in the master key list below before upgrading the key.');
 	}
 
 	try {
-		const password = passwords[masterKey.id];
+		// Just re-encrypt the master key, but using the new encryption method
+		// (which would be the default).
 		const newMasterKey = await EncryptionService.instance().reencryptMasterKey(masterKey, password, password);
 		await MasterKey.save(newMasterKey);
 		void reg.waitForSyncFinishedThenSync();

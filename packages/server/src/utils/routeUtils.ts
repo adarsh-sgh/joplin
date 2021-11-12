@@ -5,6 +5,7 @@ import Router from './Router';
 import { AppContext, HttpMethod, RouteType } from './types';
 import { URL } from 'url';
 import { csrfCheck } from './csrf';
+import { contextSessionId } from './requestUtils';
 
 const { ltrimSlashes, rtrimSlashes } = require('@joplin/lib/path-utils');
 
@@ -135,12 +136,12 @@ export function parseSubPath(basePath: string, p: string, rawPath: string = null
 		if (colonIndex2 < 0) {
 			throw new ErrorBadRequest(`Invalid path format: ${p}`);
 		} else {
-			output.id = p.substr(0, colonIndex2 + 1);
+			output.id = decodeURIComponent(p.substr(0, colonIndex2 + 1));
 			output.link = ltrimSlashes(p.substr(colonIndex2 + 1));
 		}
 	} else {
 		const s = p.split('/');
-		if (s.length >= 1) output.id = s[0];
+		if (s.length >= 1) output.id = decodeURIComponent(s[0]);
 		if (s.length >= 2) output.link = s[1];
 	}
 
@@ -200,7 +201,16 @@ export async function execRequest(routes: Routers, ctx: AppContext) {
 	// This is a generic catch-all for all private end points - if we
 	// couldn't get a valid session, we exit now. Individual end points
 	// might have additional permission checks depending on the action.
-	if (!isPublicRoute && !ctx.joplin.owner) throw new ErrorForbidden();
+	if (!isPublicRoute && !ctx.joplin.owner) {
+		if (contextSessionId(ctx, false)) {
+			// If we have a session but not a user it means the session was
+			// invalid or has expired, so display a special message, since this
+			// is also going to be displayed on the website.
+			throw new ErrorForbidden('Your session has expired. Please login again.');
+		} else {
+			throw new ErrorForbidden();
+		}
+	}
 
 	await csrfCheck(ctx, isPublicRoute);
 	disabledAccountCheck(match, ctx.joplin.owner);

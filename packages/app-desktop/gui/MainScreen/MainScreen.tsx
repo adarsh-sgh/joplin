@@ -34,7 +34,10 @@ import ShareFolderDialog from '../ShareFolderDialog/ShareFolderDialog';
 import { ShareInvitation } from '@joplin/lib/services/share/reducer';
 import removeKeylessItems from '../ResizableLayout/utils/removeKeylessItems';
 import { localSyncInfoFromState } from '@joplin/lib/services/synchronizer/syncInfoUtils';
+import { parseCallbackUrl } from '@joplin/lib/callbackUrlUtils';
+import ElectronAppWrapper from '../../ElectronAppWrapper';
 import { showMissingMasterKeyMessage } from '@joplin/lib/services/e2ee/utils';
+import { MasterKeyEntity } from '../../../lib/services/e2ee/types';
 import commands from './commands/index';
 import invitationRespond from '../../services/share/invitationRespond';
 const { connect } = require('react-redux');
@@ -154,6 +157,23 @@ class MainScreenComponent extends React.Component<Props, State> {
 		this.layoutModeListenerKeyDown = this.layoutModeListenerKeyDown.bind(this);
 
 		window.addEventListener('resize', this.window_resize);
+
+		ipcRenderer.on('asynchronous-message', (_event: any, message: string, args: any) => {
+			if (message === 'openCallbackUrl') {
+				this.openCallbackUrl(args.url);
+			}
+		});
+
+		const initialCallbackUrl = (bridge().electronApp() as ElectronAppWrapper).initialCallbackUrl();
+		if (initialCallbackUrl) {
+			this.openCallbackUrl(initialCallbackUrl);
+		}
+	}
+
+	private openCallbackUrl(url: string) {
+		console.log(`openUrl ${url}`);
+		const { command, params } = parseCallbackUrl(url);
+		void CommandService.instance().execute(command.toString(), params.id);
 	}
 
 	private updateLayoutPluginViews(layout: LayoutItem, plugins: PluginStates) {
@@ -545,8 +565,8 @@ class MainScreenComponent extends React.Component<Props, State> {
 			bridge().restart();
 		};
 
-		const onInvitationRespond = async (shareUserId: string, folderId: string, accept: boolean) => {
-			await invitationRespond(shareUserId, folderId, accept);
+		const onInvitationRespond = async (shareUserId: string, folderId: string, masterKey: MasterKeyEntity, accept: boolean) => {
+			await invitationRespond(shareUserId, folderId, masterKey, accept);
 		};
 
 		let msg = null;
@@ -591,9 +611,9 @@ class MainScreenComponent extends React.Component<Props, State> {
 			msg = this.renderNotificationMessage(
 				_('%s (%s) would like to share a notebook with you.', sharer.full_name, sharer.email),
 				_('Accept'),
-				() => onInvitationRespond(invitation.id, invitation.share.folder_id, true),
+				() => onInvitationRespond(invitation.id, invitation.share.folder_id, invitation.master_key, true),
 				_('Reject'),
-				() => onInvitationRespond(invitation.id, invitation.share.folder_id, false)
+				() => onInvitationRespond(invitation.id, invitation.share.folder_id, invitation.master_key, false)
 			);
 		} else if (this.props.hasDisabledSyncItems) {
 			msg = this.renderNotificationMessage(

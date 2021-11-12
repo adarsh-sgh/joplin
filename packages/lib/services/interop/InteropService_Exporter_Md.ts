@@ -110,7 +110,7 @@ export default class InteropService_Exporter_Md extends InteropService_Exporter_
 		}
 	}
 
-	private async getNoteExportContent_(modNote: NoteEntity) {
+	protected async getNoteExportContent_(modNote: NoteEntity) {
 		return await Note.replaceResourceInternalToExternalLinks(await Note.serialize(modNote, ['body']));
 	}
 
@@ -143,7 +143,7 @@ export default class InteropService_Exporter_Md extends InteropService_Exporter_
 		if (resource.filename) {
 			fileName = resource.filename;
 		} else if (resource.title) {
-			fileName = friendlySafeFilename(resource.title);
+			fileName = friendlySafeFilename(resource.title, null, true);
 		}
 
 		// Fall back on the resource filename saved in the users resource folder

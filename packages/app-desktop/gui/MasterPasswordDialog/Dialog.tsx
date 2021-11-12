@@ -10,6 +10,7 @@ import { getMasterPasswordStatus, getMasterPasswordStatusMessage, checkHasMaster
 import { reg } from '@joplin/lib/registry';
 import EncryptionService from '@joplin/lib/services/e2ee/EncryptionService';
 import KvStore from '@joplin/lib/services/KvStore';
+import ShareService from '@joplin/lib/services/share/ShareService';
 
 interface Props {
 	themeId: number;
@@ -60,7 +61,7 @@ export default function(props: Props) {
 				if (mode === Mode.Set) {
 					await updateMasterPassword(currentPassword, password1);
 				} else if (mode === Mode.Reset) {
-					await resetMasterPassword(EncryptionService.instance(), KvStore.instance(), password1);
+					await resetMasterPassword(EncryptionService.instance(), KvStore.instance(), ShareService.instance(), password1);
 				} else {
 					throw new Error(`Unknown mode: ${mode}`);
 				}
@@ -146,6 +147,7 @@ export default function(props: Props) {
 
 		const renderResetMasterPasswordLink = () => {
 			if (mode === Mode.Reset) return null;
+			if (status === MasterPasswordStatus.Valid) return null;
 			return <p><a href="#" onClick={onToggleMode}>Reset master password</a></p>;
 		};
 
@@ -199,7 +201,7 @@ export default function(props: Props) {
 		}
 	}
 
-	const dialogTitle = mode === Mode.Set ? _('Manager master password') : `⚠️ ${_('Reset master password')} ⚠️`;
+	const dialogTitle = mode === Mode.Set ? _('Manage master password') : `⚠️ ${_('Reset master password')} ⚠️`;
 	const okButtonLabel = mode === Mode.Set ? _('Save') : `⚠️ ${_('Reset master password')} ⚠️`;
 
 	function renderDialogWrapper() {

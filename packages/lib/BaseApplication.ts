@@ -488,7 +488,6 @@ export default class BaseApplication {
 		// appLogger.debug('Reducer action', this.reducerActionToString(action));
 
 		const result = next(action);
-		const newState = store.getState();
 		let refreshNotes = false;
 		let refreshFolders: boolean | string = false;
 		// let refreshTags = false;
@@ -496,6 +495,7 @@ export default class BaseApplication {
 		let refreshNotesHash = '';
 
 		await reduxSharedMiddleware(store, next, action);
+		const newState = store.getState();
 
 		if (this.hasGui() && ['NOTE_UPDATE_ONE', 'NOTE_DELETE', 'FOLDER_UPDATE_ONE', 'FOLDER_DELETE'].indexOf(action.type) >= 0) {
 			if (!(await reg.syncTarget().syncStarted())) void reg.scheduleSync(30 * 1000, { syncSteps: ['update_remote', 'delete_remote'] });
@@ -637,7 +637,7 @@ export default class BaseApplication {
 		BaseSyncTarget.dispatch = this.store().dispatch;
 		DecryptionWorker.instance().dispatch = this.store().dispatch;
 		ResourceFetcher.instance().dispatch = this.store().dispatch;
-		ShareService.instance().initialize(this.store());
+		ShareService.instance().initialize(this.store(), EncryptionService.instance());
 	}
 
 	public deinitRedux() {
@@ -787,15 +787,17 @@ export default class BaseApplication {
 			const locale = shim.detectAndSetLocale(Setting);
 			reg.logger().info(`First start: detected locale as ${locale}`);
 
+			Setting.skipDefaultMigrations();
+
 			if (Setting.value('env') === 'dev') {
 				Setting.setValue('showTrayIcon', 0);
 				Setting.setValue('autoUpdateEnabled', 0);
 				Setting.setValue('sync.interval', 3600);
 			}
 
-			Setting.setValue('sync.target', 0);
 			Setting.setValue('firstStart', 0);
 		} else {
+			Setting.applyDefaultMigrations();
 			setLocale(Setting.value('locale'));
 		}
 

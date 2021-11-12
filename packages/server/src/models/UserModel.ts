@@ -15,6 +15,7 @@ import resetPasswordTemplate from '../views/emails/resetPasswordTemplate';
 import { betaStartSubUrl, betaUserDateRange, betaUserTrialPeriodDays, isBetaUser, stripeConfig } from '../utils/stripe';
 import endOfBetaTemplate from '../views/emails/endOfBetaTemplate';
 import Logger from '@joplin/lib/Logger';
+import { PublicPrivateKeyPair } from '@joplin/lib/services/e2ee/ppk';
 import paymentFailedUploadDisabledTemplate from '../views/emails/paymentFailedUploadDisabledTemplate';
 import oversizedAccount1 from '../views/emails/oversizedAccount1';
 import oversizedAccount2 from '../views/emails/oversizedAccount2';
@@ -379,8 +380,12 @@ export default class UserModel extends BaseModel<User> {
 	public async resetPassword(token: string, fields: CheckRepeatPasswordInput) {
 		checkRepeatPassword(fields, true);
 		const user = await this.models().token().userFromToken(token);
-		await this.models().user().save({ id: user.id, password: fields.password });
-		await this.models().token().deleteByValue(user.id, token);
+
+		await this.withTransaction(async () => {
+			await this.models().user().save({ id: user.id, password: fields.password });
+			await this.models().session().deleteByUserId(user.id);
+			await this.models().token().deleteByValue(user.id, token);
+		}, 'UserModel::resetPassword');
 	}
 
 	public async handleBetaUserEmails() {
@@ -577,6 +582,18 @@ export default class UserModel extends BaseModel<User> {
 		const output: User = { ...user };
 		if ('email' in output) output.email = (`${user.email}`).trim().toLowerCase();
 		return output;
+	}
+
+	private async syncInfo(userId: Uuid): Promise<any> {
+		const item = await this.models().item().loadByName(userId, 'info.json');
+		if (!item) throw new Error('Cannot find info.json file');
+		const withContent = await this.models().item().loadWithContent(item.id);
+		return JSON.parse(withContent.content.toString());
+	}
+
+	public async publicPrivateKey(userId: string): Promise<PublicPrivateKeyPair> {
+		const syncInfo = await this.syncInfo(userId);
+		return syncInfo.ppk?.value || null;
 	}
 
 	// Note that when the "password" property is provided, it is going to be

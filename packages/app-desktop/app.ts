@@ -43,6 +43,7 @@ import noteListControlsCommands from './gui/NoteListControls/commands/index';
 import sidebarCommands from './gui/Sidebar/commands/index';
 import appCommands from './commands/index';
 import libCommands from '@joplin/lib/commands/index';
+import { homedir } from 'os';
 const electronContextMenu = require('./services/electron-context-menu');
 // import  populateDatabase from '@joplin/lib/services/debug/populateDatabase';
 
@@ -57,10 +58,11 @@ const commands = mainScreenCommands
 const globalCommands = appCommands.concat(libCommands);
 
 import editorCommandDeclarations from './gui/NoteEditor/editorCommandDeclarations';
+import PerFolderSortOrderService from './services/sortOrder/PerFolderSortOrderService';
 import ShareService from '@joplin/lib/services/share/ShareService';
 import checkForUpdates from './checkForUpdates';
 import { AppState } from './app.reducer';
-import syncDebugLog from '../lib/services/synchronizer/syncDebugLog';
+import syncDebugLog from '@joplin/lib/services/synchronizer/syncDebugLog';
 // import { runIntegrationTests } from '@joplin/lib/services/e2ee/ppkTestUtils';
 
 const pluginClasses = [
@@ -361,6 +363,9 @@ class Application extends BaseApplication {
 		syncDebugLog.enabled = false;
 
 		if (dir.endsWith('dev-desktop-2')) {
+			syncDebugLog.addTarget(TargetType.File, {
+				path: `${homedir()}/synclog.txt`,
+			});
 			syncDebugLog.enabled = true;
 			syncDebugLog.info(`Profile dir: ${dir}`);
 		}
@@ -383,6 +388,8 @@ class Application extends BaseApplication {
 		PluginManager.instance().register(pluginClasses);
 
 		this.initRedux();
+
+		PerFolderSortOrderService.initialize();
 
 		CommandService.instance().initialize(this.store(), Setting.value('env') == 'dev', stateToWhenClauseContext);
 
@@ -553,7 +560,6 @@ class Application extends BaseApplication {
 		// 		},
 		// 	});
 		// }, 2000);
-
 
 		// setTimeout(() => {
 		// 	this.dispatch({

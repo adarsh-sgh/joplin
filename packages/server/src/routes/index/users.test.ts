@@ -286,6 +286,27 @@ describe('index/users', function() {
 		expect(notification.key).toBe('passwordSet');
 	});
 
+	test('should not confirm email if not requested', async function() {
+		let user1 = await models().user().save({
+			email: 'user1@localhost',
+			must_set_password: 1,
+			email_confirmed: 0,
+			password: uuidgen(),
+		});
+
+		const email = (await models().email().all()).find(e => e.recipient_id === user1.id);
+		const matches = email.body.match(/\/(users\/.*)(\?token=)(.{32})/);
+		const path = matches[1];
+		const token = matches[3];
+
+		await execRequest('', 'GET', path, null, { query: { token, confirm_email: '0' } });
+
+		// In this case, the email should not be confirmed, because
+		// "confirm_email" is set to 0.
+		user1 = await models().user().load(user1.id);
+		expect(user1.email_confirmed).toBe(0);
+	});
+
 	test('should allow user to verify their email', async function() {
 		let user1 = await models().user().save({
 			email: 'user1@localhost',
@@ -343,6 +364,27 @@ describe('index/users', function() {
 		expect(keys[0].value).toBe('user1@localhost'); // The old email has been saved
 
 		await expectThrow(async () => execRequest('', 'GET', path, null, { query: { token } }));
+	});
+
+	test('should delete sessions when changing password', async function() {
+		const { user, session, password } = await createUserAndSession(1);
+
+		await models().session().authenticate(user.email, password);
+		await models().session().authenticate(user.email, password);
+		await models().session().authenticate(user.email, password);
+
+		expect(await models().session().count()).toBe(4);
+
+		await patchUser(session.id, {
+			id: user.id,
+			email: 'changed@example.com',
+			password: 'hunter11hunter22hunter33',
+			password2: 'hunter11hunter22hunter33',
+		}, '/users/me');
+
+		const sessions = await models().session().all();
+		expect(sessions.length).toBe(1);
+		expect(sessions[0].id).toBe(session.id);
 	});
 
 	test('should apply ACL', async function() {
