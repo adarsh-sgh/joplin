@@ -88,7 +88,12 @@ export default function openEditDialog(editor: any, markupToHtml: any, dispatchD
 		},
 		onSubmit: async (dialogApi: any) => {
 			const newSource = newBlockSource(dialogApi.getData().languageInput, dialogApi.getData().codeTextArea, source);
-			const md = `${newSource.openCharacters}${newSource.content}${newSource.closeCharacters}`;
+			let md: string;
+			if (newSource.openCharacters.slice(0, 4) === '\n```' && newSource.closeCharacters === '\n```\n') {
+				md = `${newSource.openCharacters}${newSource.content}${newSource.closeCharacters}`;
+			} else {
+				md = `${newSource.openCharacters}${newSource.content.trim()}${newSource.closeCharacters}`;
+			}
 			const result = await markupToHtml.current(MarkupToHtml.MARKUP_LANGUAGE_MARKDOWN, md, { bodyOnly: true });
 
 			// markupToHtml will return the complete editable HTML, but we only
